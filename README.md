@@ -10,3 +10,8 @@ Sollte eine ISBN nicht in der KBART-, aber in der Excel-Datei vorhanden sein, we
 Anwendungsbeispiele sind z.B. die Auswahl von EBS-Titeln, Pick&Choose Titeln oder Einzelkäufe von Bibliotheken
 
 Das Programm basiert auf Python und ist auf verschiedenen Systemen wie Windows und Linux ausführbar.
+Um es manuell in eine ausführbare Datei umzuwandeln, kann folgender Befehl genutzt werden:
+
+```
+pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
+```
