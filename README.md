@@ -1,5 +1,5 @@
-# EBS-Abgleich
-Das Programm vergleicht KBART- mit Excel-Dateien anhand der ISBN. Mit Beenden des Abgleichs wird eine neue KBART erstellt, welche die Titel aus der Excel-Datei enthält.
+# Abgleich mit KBART Datei
+Das Programm vergleicht KBART- mit Excel-Dateien anhand der E-ISBN bzw. Online Identifier. Mit Beenden des Abgleichs wird eine neue KBART erstellt, welche die Titel aus der Excel-Datei enthält.
 
 Es soll dazu dienen, aus einer großen Anzahl an Titeln in der KBART nur diejenigen auszuwählen, die in der Excel-Tabelle vorhanden sind und sie im KBART-Format bereitzustellen.
 
