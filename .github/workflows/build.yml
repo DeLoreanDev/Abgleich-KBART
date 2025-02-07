@@ -1,0 +1,46 @@
+name: Build Executables
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install pyinstaller openpyxl
+      - name: Build executable
+        run: pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-executable
+          path: dist/
+
+  build_linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install pyinstaller openpyxl
+      - name: Build executable
+        run: pyinstaller --onefile --hidden-import openpyxl kbart_gui.py
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-executable
+          path: dist/
