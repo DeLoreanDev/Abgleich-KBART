@@ -2,14 +2,8 @@ name: Build and Release Executables
 
 on:
   push:
-    branches:
-      - main
     tags:
-      - 'v*.*.*'  # Trigger on new tags matching version number pattern
-
-  pull_request:
-    branches:
-      - main
+      - 'v*.*.*'
 
 jobs:
   build_windows:
@@ -53,18 +47,20 @@ jobs:
     needs: [build_windows, build_linux]
     steps:
       - uses: actions/checkout@v3
-      - name: Download artifacts
+      - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
           name: windows-executable
           path: ./windows
           
-      - uses: actions/download-artifact@v4
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
         with:
           name: linux-executable
           path: ./linux
 
       - name: Create GitHub Release
+        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -73,6 +69,23 @@ jobs:
           release_name: "Release ${{ github.ref_name }}"
           draft: false
           prerelease: false
-          files: |
-            ./windows/* 
-            ./linux/*
+
+      - name: Upload Windows Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./windows/your-exe-file.exe
+          asset_name: "your-exe-file-windows.exe"
+          asset_content_type: application/octet-stream
+
+      - name: Upload Linux Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux/your-exe-file
+          asset_name: "your-exe-file-linux"
+          asset_content_type: application/octet-stream
