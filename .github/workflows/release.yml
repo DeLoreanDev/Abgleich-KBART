@@ -1,15 +1,14 @@
 name: Build and Release Executables
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
+  release:
+    types: [created]
 
 jobs:
   build_windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -22,12 +21,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-executable
-          path: dist/
+          path: dist/kbart_gui.exe
 
   build_linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
@@ -40,13 +39,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-executable
-          path: dist/
+          path: dist/kbart_gui
 
   release:
     runs-on: ubuntu-latest
     needs: [build_windows, build_linux]
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v3
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
@@ -59,25 +59,14 @@ jobs:
           name: linux-executable
           path: ./linux
 
-      - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: "Release ${{ github.ref_name }}"
-          draft: false
-          prerelease: false
-
       - name: Upload Windows Release Asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./windows/your-exe-file.exe
-          asset_name: "your-exe-file-windows.exe"
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./windows/kbart_gui.exe
+          asset_name: "kbart_gui-windows.exe"
           asset_content_type: application/octet-stream
 
       - name: Upload Linux Release Asset
@@ -85,7 +74,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./linux/your-exe-file
-          asset_name: "your-exe-file-linux"
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./linux/kbart_gui
+          asset_name: "kbart_gui-linux"
           asset_content_type: application/octet-stream
