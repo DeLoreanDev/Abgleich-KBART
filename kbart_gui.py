@@ -119,7 +119,7 @@ def filter_kbart():
         purchase_df['normalized_isbn'] = normalize_isbn(purchase_df[isbn_column_purchase])
 
         # Filtern der KBART-Datei
-        # Ein Datensatz wird behalten, wenn entweder die online_identifier oder die print_identifier übereinstimmt
+        # Datensatz wird behalten, wenn online_identifier / die print_identifier matcht
         filtered_kbart_df = kbart_df[
             normalize_isbn(kbart_df['online_identifier']).isin(purchase_isbns) |
             normalize_isbn(kbart_df['print_identifier']).isin(purchase_isbns)
