@@ -102,32 +102,31 @@ def filter_kbart():
     try:
         # Dateien laden
         kbart_df = pd.read_csv(kbart_file, sep='\t')
-        purchase_df = pd.read_excel(purchase_file, skiprows=2)
+        purchase_df = pd.read_excel(purchase_file)
 
-        # ISBN-Spalte normalisieren
+        # ISBN-Spalte aus der Kaufdatei normalisieren
         isbn_column_purchase = purchase_df.columns[isbn_column_number - 1]
-        kbart_df['normalized_isbn'] = (
-            kbart_df['online_identifier']
-            .astype(str)
-            .str.replace('-', '')
-            .str.replace('.0', '', regex=False)
-        )
-        purchase_df['normalized_isbn'] = (
-            purchase_df[isbn_column_purchase]
-            .astype(str)
-            .str.replace('-', '')
-            .str.replace('.0', '', regex=False)
-        )
+        purchase_isbns = normalize_isbn(purchase_df[isbn_column_purchase])
 
-        # Gefilterte Datensätze
+        # ISBNs aus der KBART-Datei normalisieren (online und print)
+        online_isbns = normalize_isbn(kbart_df['online_identifier'])
+        print_isbns = normalize_isbn(kbart_df['print_identifier'])
+
+        # Kombinierter Satz von KBART-ISBNs
+        kbart_isbns_set = set(online_isbns.unique()).union(set(print_isbns.unique()))
+
+        # Normalisierte ISBNs für den Abgleich in einer neuen Spalte speichern
+        purchase_df['normalized_isbn'] = normalize_isbn(purchase_df[isbn_column_purchase])
+
+        # Filtern der KBART-Datei
+        # Datensatz wird behalten, wenn online_identifier / die print_identifier matcht
         filtered_kbart_df = kbart_df[
-            kbart_df['normalized_isbn'].isin(purchase_df['normalized_isbn'])
+            normalize_isbn(kbart_df['online_identifier']).isin(purchase_isbns) |
+            normalize_isbn(kbart_df['print_identifier']).isin(purchase_isbns)
         ]
 
-        # Fehlende ISBNs bereinigen
-        missing_isbns_series = purchase_df[
-            ~purchase_df['normalized_isbn'].isin(kbart_df['normalized_isbn'])
-        ]['normalized_isbn']
+        # Fehlende ISBNs finden
+        missing_isbns_series = purchase_isbns[~purchase_isbns.isin(kbart_isbns_set)]
 
         # Bereinigung: Entferne NaN, 'nan', '0'
         missing_isbns = (
