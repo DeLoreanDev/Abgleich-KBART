@@ -102,6 +102,11 @@ def filter_kbart():
     try:
         # Dateien laden
         kbart_df = pd.read_csv(kbart_file, sep='\t')
+
+        # Serials ausfiltern, um die Warnung zu vermeiden und der Anforderung zu entsprechen
+        if 'publication_type' in kbart_df.columns:
+            kbart_df = kbart_df[kbart_df['publication_type'] != 'Serial']
+
         purchase_df = pd.read_excel(purchase_file)
 
         # ISBN-Spalte aus der Kaufdatei normalisieren
