@@ -1,22 +1,24 @@
 """
 KBART Filter Tool
 
-Dieses Tool ermöglicht das Filtern von KBART-Dateien basierend auf einer Kaufdatei. 
-Fehlende ISBNs werden in einer separaten Datei gespeichert.
+Dieses Tool ermöglicht das Filtern von KBART-Dateien basierend auf einer Kaufdatei.
+Es werden alle Spalten in der Kaufdatei berücksichtigt, die 'ISBN' im Namen tragen.
+ISBNs innerhalb einer Zelle können durch ein Semikolon getrennt sein.
+Fehlende ISBNs werden zeilenweise ermittelt und mit der zugehörigen Zeilennummer
+gruppiert in einer separaten TSV-Datei gespeichert.
 """
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
+from tkinter import filedialog, messagebox
 import pandas as pd
-import numpy as np
 
 def select_file():
     """
     Öffnet einen Dateidialog zur Auswahl einer Datei und gibt den Dateipfad zurück.
 
     Returns:
-        str: Der Dateipfad der ausgewählten Datei oder ein leerer String, 
-            wenn keine Datei gewählt wurde.
+        str: Der Dateipfad der ausgewählten Datei oder ein leerer String,
+             wenn keine Datei gewählt wurde.
     """
     return filedialog.askopenfilename()
 
@@ -37,24 +39,40 @@ def save_file(dataframe, message):
         dataframe.to_csv(file_path, sep='\t', index=False, encoding='utf-8')
         messagebox.showinfo("Gespeichert", f"{message}: {file_path}")
 
-def save_missing_isbns(missing_isbns):
+# ### GEÄNDERT: Funktion gruppiert die ISBNs pro Zeilennummer vor dem Speichern ###
+def save_missing_items(missing_items):
     """
-    Speichert eine Liste von fehlenden ISBNs in einer Textdatei.
+    Gruppiert eine Liste von Tupeln (Zeilennummer, ISBN) nach Zeilennummer
+    und speichert das Ergebnis in einer TSV-Datei.
 
     Parameters:
-        missing_isbns (list): Liste der fehlenden ISBNs.
+        missing_items (list): Eine Liste von Tupeln, z.B. [(2, '978...'), (5, '978...')].
     """
-    if missing_isbns:
+    if missing_items:
         file_path = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt")],
-            title="Speichern der fehlenden ISBNs"
+            defaultextension=".tsv",
+            filetypes=[("TSV files", "*.tsv"), ("All files", "*.*")],
+            title="Speichern der fehlenden ISBNs mit Zeilennummer"
         )
         if file_path:
-            # Konvertiere alle Einträge in der Liste in Strings
-            with open(file_path, 'w', encoding='utf-8') as file:
-                file.write("\n".join(map(str, missing_isbns)))
-            messagebox.showinfo("Gespeichert", f"Fehlende ISBNs wurden gespeichert in: {file_path}")
+            # Erstelle ein initiales DataFrame
+            initial_df = pd.DataFrame(missing_items, columns=['Zeilennummer_Kaufdatei', 'ISBN'])
+
+            # Gruppiere nach der Zeilennummer und füge die ISBNs mit "; " zusammen
+            grouped_df = (
+                initial_df
+                .groupby('Zeilennummer_Kaufdatei')['ISBN']
+                .agg('; '.join)
+                .reset_index()
+            )
+
+            # Benenne die Spalte um für mehr Klarheit
+            grouped_df.rename(columns={'ISBN': 'Nicht_gefundene_ISBNs'}, inplace=True)
+
+            # Speichere das gruppierte DataFrame
+            grouped_df.to_csv(file_path, sep='\t', index=False, encoding='utf-8')
+            messagebox.showinfo(
+                "Gespeichert", f"Fehlende ISBNs wurden gruppiert gespeichert in: {file_path}")
 
 def normalize_isbn(series):
     """
@@ -72,13 +90,14 @@ def normalize_isbn(series):
         .str.replace('.0', '', regex=False)
         .str.strip()
         .replace('nan', pd.NA)
+        .replace('', pd.NA)
         .replace('0', pd.NA)
         .dropna()
     )
 
 def filter_kbart():
     """
-    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei. 
+    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei.
     Fehlende ISBNs werden gespeichert.
     """
     kbart_file = select_file()
@@ -91,97 +110,128 @@ def filter_kbart():
         messagebox.showwarning("Dateiauswahl", "Kaufdatei nicht ausgewählt.")
         return
 
-    isbn_column_number = simpledialog.askinteger(
-        "ISBN-Spalte",
-        "Bitte Spaltennummer der ISBN in der Kaufdatei angeben (beginnend bei 1):"
-    )
-    if not isbn_column_number:
-        messagebox.showwarning("Eingabe", "Keine ISBN-Spalte angegeben.")
-        return
-
     try:
         # Dateien laden
         kbart_df = pd.read_csv(kbart_file, sep='\t')
 
-        # Serials ausfiltern, um die Warnung zu vermeiden und der Anforderung zu entsprechen
         if 'publication_type' in kbart_df.columns:
             kbart_df = kbart_df[kbart_df['publication_type'] != 'Serial']
 
         purchase_df = pd.read_excel(purchase_file)
 
-        # ISBN-Spalte aus der Kaufdatei normalisieren
-        isbn_column_purchase = purchase_df.columns[isbn_column_number - 1]
-        purchase_isbns = normalize_isbn(purchase_df[isbn_column_purchase])
+        # Alle Spalten finden, die "ISBN" im Namen haben
+        isbn_columns = [col for col in purchase_df.columns if 'ISBN' in str(col)]
+        if not isbn_columns:
+            messagebox.showerror(
+                "Fehler", "Keine Spalten mit 'ISBN' im Namen in der Kaufdatei gefunden.")
+            return
 
-        # ISBNs aus der KBART-Datei normalisieren (online und print)
+        # Alle ISBNs aus der Kaufdatei für das Filtern sammeln
+        all_purchase_isns_raw = []
+        for col in isbn_columns:
+            cleaned_series = purchase_df[col].dropna().astype(str)
+            exploded_series = cleaned_series.str.split(';').explode()
+            all_purchase_isns_raw.extend(exploded_series.tolist())
+
+        if not all_purchase_isns_raw:
+            messagebox.showinfo("Information", "Keine ISBNs in den gefundenen Spalten gefunden.")
+            return
+
+        purchase_isns_series = pd.Series(all_purchase_isns_raw)
+        purchase_isbns = normalize_isbn(purchase_isns_series)
+
+        # ISBNs aus der KBART-Datei normalisieren und für schnellen Abgleich in ein Set packen
         online_isbns = normalize_isbn(kbart_df['online_identifier'])
         print_isbns = normalize_isbn(kbart_df['print_identifier'])
-
-        # Kombinierter Satz von KBART-ISBNs
         kbart_isbns_set = set(online_isbns.unique()).union(set(print_isbns.unique()))
 
-        # Normalisierte ISBNs für den Abgleich in einer neuen Spalte speichern
-        purchase_df['normalized_isbn'] = normalize_isbn(purchase_df[isbn_column_purchase])
-
         # Filtern der KBART-Datei
-        # Datensatz wird behalten, wenn online_identifier / die print_identifier matcht
         filtered_kbart_df = kbart_df[
             normalize_isbn(kbart_df['online_identifier']).isin(purchase_isbns) |
             normalize_isbn(kbart_df['print_identifier']).isin(purchase_isbns)
         ]
 
-        # Fehlende ISBNs finden
-        missing_isbns_series = purchase_isbns[~purchase_isbns.isin(kbart_isbns_set)]
+        # Fehlende ISBNs mit Zeilennummer erfassen
+        missing_items = []
+        for index, row in purchase_df.iterrows():
+            excel_row_number = index + 2
 
-        # Bereinigung: Entferne NaN, 'nan', '0'
-        missing_isbns = (
-            missing_isbns_series
-            .replace('nan', np.nan)  # 'nan' als NaN behandeln
-            .dropna()                # Entfernt echte NaN-Werte
-            .astype(str)             # Konvertiert alle Werte in Strings
-            .tolist()
-        )
+            isbns_in_row_raw = []
+            for col in isbn_columns:
+                cell_value = row[col]
+                if pd.notna(cell_value):
+                    isbns_in_row_raw.extend(str(cell_value).split(';'))
 
-        # Entferne explizite "0" Werte
-        missing_isbns = [isbn for isbn in missing_isbns if isbn != "0"]
+            normalized_isbns_in_row = normalize_isbn(pd.Series(isbns_in_row_raw)).tolist()
 
-        if missing_isbns:
-            save_missing_isbns(missing_isbns)
+            if not normalized_isbns_in_row:
+                continue
+
+            match_found_for_row = any(isbn in kbart_isbns_set for isbn in normalized_isbns_in_row)
+
+            if not match_found_for_row:
+                for isbn in normalized_isbns_in_row:
+                    missing_items.append((excel_row_number, isbn))
+
+        # Speichern und Anzeigen der Ergebnisse
+        if missing_items:
+            save_missing_items(missing_items)
         else:
             messagebox.showinfo(
-                "Ergebnis", 
-                "Alle ISBNs aus der Kaufdatei sind in der KBART-Datei vorhanden."
+                "Ergebnis",
+                "Alle Titel aus der Kaufdatei sind in der KBART-Datei vorhanden."
             )
 
         if not filtered_kbart_df.empty:
-            save_file(filtered_kbart_df, "Gefilterte Datei wurde gespeichert als")
+            save_file(filtered_kbart_df, "Gefilterte KBART-Datei wurde gespeichert als")
+        else:
+            messagebox.showinfo(
+                "Ergebnis", 
+                "Keine Übereinstimmungen gefunden. Die gefilterte KBART-Datei ist leer.")
 
     except pd.errors.ParserError as e:
-        messagebox.showerror("Fehler", f"Fehler beim Laden der Datei: {e}")
+        messagebox.showerror(
+            "Fehler", 
+            f"Fehler beim Laden der Datei: {e}")
     except KeyError as e:
-        messagebox.showerror("Fehler", f"Spalte '{e}' nicht gefunden.")
+        messagebox.showerror(
+            "Fehler", 
+            f"Spalte {e} nicht gefunden. Bitte prüfen Sie die Spaltennamen in den Dateien.")
     except FileNotFoundError as e:
-        messagebox.showerror("Fehler", f"Datei nicht gefunden: {e}")
+        messagebox.showerror(
+            "Fehler", f"Datei nicht gefunden: {e}")
     except ValueError as e:
-        messagebox.showerror("Fehler", f"Ungültiger Wert: {e}")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        messagebox.showerror("Fehler", f"Ein unbekannter Fehler ist aufgetreten: {e}")
+        messagebox.showerror(
+            "Fehler", 
+            f"Ungültiger Wert: {e}")
+    except Exception as e:
+        messagebox.showerror(
+            "Fehler", 
+            f"Ein unerwarteter Fehler ist aufgetreten: {e}")
 
 # GUI-Setup
 root = tk.Tk()
 root.title("KBART Filter Tool")
 
 label = tk.Label(root, text="KBART und Titellisten-Filter", font=("Helvetica", 16))
-label.pack(pady=10)
+label.pack(pady=20)
 
-button = tk.Button(root, text="Abgleich starten", command=filter_kbart, font=("Helvetica", 12))
+button = tk.Button(
+    root,
+    text="Abgleich starten",
+    command=filter_kbart,
+    font=("Helvetica", 12),
+    width=20,
+    height=2
+)
 button.pack(pady=10)
 
 info_label = tk.Label(
     root,
-    text="Bitte wählen Sie zunächst die KBART-Datei und dann die Titelliste aus.",
+    text="Bitte wählen Sie zuerst die KBART-Datei (.tsv) und dann die Kaufdatei (.xlsx) aus.",
     font=("Helvetica", 10)
 )
 info_label.pack(pady=10)
 
+root.geometry("400x200")
 root.mainloop()
