@@ -56,7 +56,10 @@ def save_missing_isbns(missing_isbns):
             try:
                 with open(file_path, 'w', encoding='utf-8') as file:
                     file.write("\n".join(map(str, missing_isbns)))
-                messagebox.showinfo("Gespeichert", f"Fehlende ISBNs wurden gespeichert in: {file_path}")
+                messagebox.showinfo(
+                    "Gespeichert",
+                    f"Fehlende ISBNs wurden gespeichert in: {file_path}"
+                )
             except OSError as e:
                 messagebox.showerror("Fehler", f"Fehler beim Schreiben der Datei: {e}")
 
@@ -83,20 +86,22 @@ def normalize_isbn(series):
     )
 
 
-def filter_kbart():
+def _collect_inputs():
     """
-    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei.
-    Fehlende ISBNs werden gespeichert.
+    Fordert den Nutzer zur Auswahl von KBART-Datei, Kaufdatei und ISBN-Spalte auf.
+
+    Returns:
+        tuple: (kbart_file, purchase_file, isbn_column_number) oder None bei Abbruch.
     """
     kbart_file = select_file()
     if not kbart_file:
         messagebox.showwarning("Dateiauswahl", "KBART-Datei nicht ausgewählt.")
-        return
+        return None
 
     purchase_file = select_file()
     if not purchase_file:
         messagebox.showwarning("Dateiauswahl", "Kaufdatei nicht ausgewählt.")
-        return
+        return None
 
     isbn_column_number = simpledialog.askinteger(
         "ISBN-Spalte",
@@ -104,7 +109,21 @@ def filter_kbart():
     )
     if isbn_column_number is None or isbn_column_number <= 0:
         messagebox.showwarning("Eingabe", "Keine gültige ISBN-Spalte angegeben.")
+        return None
+
+    return kbart_file, purchase_file, isbn_column_number
+
+
+def filter_kbart():
+    """
+    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei.
+    Fehlende ISBNs werden gespeichert.
+    """
+    inputs = _collect_inputs()
+    if not inputs:
         return
+
+    kbart_file, purchase_file, isbn_column_number = inputs
 
     try:
         kbart_df = pd.read_csv(kbart_file, sep='\t', encoding='utf-8-sig')
