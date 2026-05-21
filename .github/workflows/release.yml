@@ -10,11 +10,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
       - name: Install dependencies
-        run: pip install pyinstaller pandas numpy openpyxl
+        run: pip install pyinstaller pandas openpyxl
       - name: Build executable
         run: pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
       - name: Upload artifact
@@ -28,11 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
       - name: Install dependencies
-        run: pip install pyinstaller pandas numpy openpyxl
+        run: pip install pyinstaller pandas openpyxl
       - name: Build executable
         run: pyinstaller --onefile --hidden-import openpyxl kbart_gui.py
       - name: Upload artifact
@@ -52,29 +52,17 @@ jobs:
         with:
           name: windows-executable
           path: ./windows
-          
+
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
           name: linux-executable
           path: ./linux
 
-      - name: Upload Windows Release Asset
-        uses: actions/upload-release-asset@v1
+      - name: Upload Release Assets
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            ./windows/kbart_gui.exe#kbart_gui-windows.exe \
+            ./linux/kbart_gui#kbart_gui-linux
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./windows/kbart_gui.exe
-          asset_name: "kbart_gui-windows.exe"
-          asset_content_type: application/octet-stream
-
-      - name: Upload Linux Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./linux/kbart_gui
-          asset_name: "kbart_gui-linux"
-          asset_content_type: application/octet-stream

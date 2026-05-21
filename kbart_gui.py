@@ -1,24 +1,25 @@
 """
 KBART Filter Tool
 
-Dieses Tool ermöglicht das Filtern von KBART-Dateien basierend auf einer Kaufdatei. 
+Dieses Tool ermöglicht das Filtern von KBART-Dateien basierend auf einer Kaufdatei.
 Fehlende ISBNs werden in einer separaten Datei gespeichert.
 """
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 import pandas as pd
-import numpy as np
+
 
 def select_file():
     """
     Öffnet einen Dateidialog zur Auswahl einer Datei und gibt den Dateipfad zurück.
 
     Returns:
-        str: Der Dateipfad der ausgewählten Datei oder ein leerer String, 
+        str: Der Dateipfad der ausgewählten Datei oder ein leerer String,
             wenn keine Datei gewählt wurde.
     """
     return filedialog.askopenfilename()
+
 
 def save_file(dataframe, message):
     """
@@ -37,6 +38,7 @@ def save_file(dataframe, message):
         dataframe.to_csv(file_path, sep='\t', index=False, encoding='utf-8')
         messagebox.showinfo("Gespeichert", f"{message}: {file_path}")
 
+
 def save_missing_isbns(missing_isbns):
     """
     Speichert eine Liste von fehlenden ISBNs in einer Textdatei.
@@ -51,34 +53,39 @@ def save_missing_isbns(missing_isbns):
             title="Speichern der fehlenden ISBNs"
         )
         if file_path:
-            # Konvertiere alle Einträge in der Liste in Strings
-            with open(file_path, 'w', encoding='utf-8') as file:
-                file.write("\n".join(map(str, missing_isbns)))
-            messagebox.showinfo("Gespeichert", f"Fehlende ISBNs wurden gespeichert in: {file_path}")
+            try:
+                with open(file_path, 'w', encoding='utf-8') as file:
+                    file.write("\n".join(map(str, missing_isbns)))
+                messagebox.showinfo("Gespeichert", f"Fehlende ISBNs wurden gespeichert in: {file_path}")
+            except OSError as e:
+                messagebox.showerror("Fehler", f"Fehler beim Schreiben der Datei: {e}")
+
 
 def normalize_isbn(series):
     """
-    Normalisiert ISBN-Werte, indem ungültige Einträge entfernt werden.
+    Normalisiert ISBN-Werte, indem Formatierungsartefakte entfernt werden.
+    Ungültige Werte ('nan', '0') werden durch pd.NA ersetzt.
+    Die zurückgegebene Series hat dieselbe Länge wie die Eingabe.
 
     Parameters:
         series (pd.Series): Eine Serie mit ISBN-Werten.
 
     Returns:
-        pd.Series: Eine Serie mit normalisierten ISBNs.
+        pd.Series: Eine Serie mit normalisierten ISBNs (gleiche Länge wie Eingabe).
     """
     return (
         series.astype(str)
-        .str.replace('-', '')
+        .str.replace('-', '', regex=False)
         .str.replace('.0', '', regex=False)
         .str.strip()
         .replace('nan', pd.NA)
         .replace('0', pd.NA)
-        .dropna()
     )
+
 
 def filter_kbart():
     """
-    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei. 
+    Filtert eine KBART-Datei basierend auf ISBNs aus einer Kaufdatei.
     Fehlende ISBNs werden gespeichert.
     """
     kbart_file = select_file()
@@ -95,61 +102,53 @@ def filter_kbart():
         "ISBN-Spalte",
         "Bitte Spaltennummer der ISBN in der Kaufdatei angeben (beginnend bei 1):"
     )
-    if not isbn_column_number:
-        messagebox.showwarning("Eingabe", "Keine ISBN-Spalte angegeben.")
+    if isbn_column_number is None or isbn_column_number <= 0:
+        messagebox.showwarning("Eingabe", "Keine gültige ISBN-Spalte angegeben.")
         return
 
     try:
-        # Dateien laden
-        kbart_df = pd.read_csv(kbart_file, sep='\t')
+        kbart_df = pd.read_csv(kbart_file, sep='\t', encoding='utf-8-sig')
 
-        # Serials ausfiltern, um die Warnung zu vermeiden und der Anforderung zu entsprechen
         if 'publication_type' in kbart_df.columns:
             kbart_df = kbart_df[kbart_df['publication_type'] != 'Serial']
 
         purchase_df = pd.read_excel(purchase_file)
 
-        # ISBN-Spalte aus der Kaufdatei normalisieren
-        isbn_column_purchase = purchase_df.columns[isbn_column_number - 1]
-        purchase_isbns = normalize_isbn(purchase_df[isbn_column_purchase])
+        if isbn_column_number > len(purchase_df.columns):
+            messagebox.showwarning(
+                "Eingabe",
+                f"Die Kaufdatei hat nur {len(purchase_df.columns)} Spalten."
+            )
+            return
 
-        # ISBNs aus der KBART-Datei normalisieren (online und print)
+        # ISBN-Spalte aus der Kaufdatei normalisieren (nur gültige Werte behalten)
+        isbn_column_purchase = purchase_df.columns[isbn_column_number - 1]
+        purchase_isbns = normalize_isbn(purchase_df[isbn_column_purchase]).dropna()
+
+        # ISBNs aus der KBART-Datei normalisieren — gleiche Länge wie kbart_df
+        # beibehalten für korrektes Boolean-Masking (NaN in .isin() wird als False behandelt)
         online_isbns = normalize_isbn(kbart_df['online_identifier'])
         print_isbns = normalize_isbn(kbart_df['print_identifier'])
 
-        # Kombinierter Satz von KBART-ISBNs
-        kbart_isbns_set = set(online_isbns.unique()).union(set(print_isbns.unique()))
+        # Kombinierter Satz von KBART-ISBNs (NaN explizit ausschließen)
+        kbart_isbns_set = set(online_isbns.dropna()) | set(print_isbns.dropna())
 
-        # Normalisierte ISBNs für den Abgleich in einer neuen Spalte speichern
-        purchase_df['normalized_isbn'] = normalize_isbn(purchase_df[isbn_column_purchase])
-
-        # Filtern der KBART-Datei
-        # Datensatz wird behalten, wenn online_identifier / die print_identifier matcht
+        # Filtern der KBART-Datei — vorberechnete Series wiederverwenden
         filtered_kbart_df = kbart_df[
-            normalize_isbn(kbart_df['online_identifier']).isin(purchase_isbns) |
-            normalize_isbn(kbart_df['print_identifier']).isin(purchase_isbns)
+            online_isbns.isin(purchase_isbns) |
+            print_isbns.isin(purchase_isbns)
         ]
 
-        # Fehlende ISBNs finden
-        missing_isbns_series = purchase_isbns[~purchase_isbns.isin(kbart_isbns_set)]
-
-        # Bereinigung: Entferne NaN, 'nan', '0'
-        missing_isbns = (
-            missing_isbns_series
-            .replace('nan', np.nan)  # 'nan' als NaN behandeln
-            .dropna()                # Entfernt echte NaN-Werte
-            .astype(str)             # Konvertiert alle Werte in Strings
-            .tolist()
-        )
-
-        # Entferne explizite "0" Werte
-        missing_isbns = [isbn for isbn in missing_isbns if isbn != "0"]
+        # Fehlende ISBNs finden (purchase_isbns ist bereits bereinigt)
+        missing_isbns = purchase_isbns[
+            ~purchase_isbns.isin(kbart_isbns_set)
+        ].tolist()
 
         if missing_isbns:
             save_missing_isbns(missing_isbns)
         else:
             messagebox.showinfo(
-                "Ergebnis", 
+                "Ergebnis",
                 "Alle ISBNs aus der Kaufdatei sind in der KBART-Datei vorhanden."
             )
 
@@ -160,12 +159,15 @@ def filter_kbart():
         messagebox.showerror("Fehler", f"Fehler beim Laden der Datei: {e}")
     except KeyError as e:
         messagebox.showerror("Fehler", f"Spalte '{e}' nicht gefunden.")
+    except IndexError as e:
+        messagebox.showerror("Fehler", f"Spaltenindex außerhalb des gültigen Bereichs: {e}")
     except FileNotFoundError as e:
         messagebox.showerror("Fehler", f"Datei nicht gefunden: {e}")
     except ValueError as e:
         messagebox.showerror("Fehler", f"Ungültiger Wert: {e}")
     except Exception as e:  # pylint: disable=broad-exception-caught
         messagebox.showerror("Fehler", f"Ein unbekannter Fehler ist aufgetreten: {e}")
+
 
 # GUI-Setup
 root = tk.Tk()
