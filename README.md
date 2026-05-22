@@ -15,3 +15,12 @@ Um es manuell in eine ausführbare Datei umzuwandeln, kann folgender Befehl genu
 ```
 pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
 ```
+
+## Lizenz
+
+Dieses Programm ist freie Software und steht unter der
+[GNU Affero General Public License v3.0 oder später](LICENSE) (AGPL-3.0-or-later).
+
+Das bedeutet: Du darfst das Programm frei nutzen, verändern und weitergeben —
+auch veränderte Versionen müssen unter derselben Lizenz bleiben und ihren
+Quellcode offenlegen, auch wenn das Programm als Netzwerkdienst betrieben wird.
