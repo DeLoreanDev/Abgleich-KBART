@@ -14,9 +14,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install pyinstaller pandas numpy openpyxl
+        run: pip install pyinstaller pandas openpyxl customtkinter
       - name: Build executable
-        run: pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
+        run: pyinstaller --onefile --windowed --hidden-import openpyxl --collect-all customtkinter kbart_gui.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -32,9 +32,9 @@ jobs:
         with:
           python-version: '3.x'
       - name: Install dependencies
-        run: pip install pyinstaller pandas numpy openpyxl
+        run: pip install pyinstaller pandas openpyxl customtkinter
       - name: Build executable
-        run: pyinstaller --onefile --hidden-import openpyxl kbart_gui.py
+        run: pyinstaller --onefile --hidden-import openpyxl --collect-all customtkinter kbart_gui.py
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

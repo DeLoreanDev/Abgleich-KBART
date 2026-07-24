@@ -9,9 +9,34 @@ Sollte eine ISBN nicht in der KBART-, aber in der Excel-Datei vorhanden sein, we
 
 Anwendungsbeispiele sind z.B. die Auswahl von EBS-Titeln, Pick&Choose Titeln oder Einzelkäufe von Bibliotheken
 
+## Oberfläche
+
+Der gesamte Ablauf findet in einem Fenster statt: beide Dateien auswählen, ISBN-Spalte
+bestimmen, Abgleich starten, Ergebnis prüfen, exportieren.
+
+* Die ISBN-Spalte wird über ihren **Namen** gewählt, nicht über eine Spaltennummer.
+  Eine Spalte mit "ISBN" im Namen wird automatisch vorgeschlagen, darunter erscheinen
+  Beispielwerte zur Kontrolle.
+* Vor dem Speichern zeigt das Programm, **was** gefunden wurde: Trefferzahl,
+  Anzahl der ISBN ohne Entsprechung, Trefferquote und beide Listen als Tabelle.
+* Der Abgleich läuft in einem Hintergrund-Thread, das Fenster bleibt bedienbar.
+* Der Filter für Zeitschriften (`publication_type = Serial`) ist als Option sichtbar
+  und abschaltbar.
+* Helles und dunkles Farbschema.
+
+## Installation
+
+```
+pip install -r requirements.txt
+python kbart_gui.py
+```
+
 Das Programm basiert auf Python und ist auf verschiedenen Systemen wie Windows und Linux ausführbar.
 Um es manuell in eine ausführbare Datei umzuwandeln, kann folgender Befehl genutzt werden:
 
 ```
-pyinstaller --onefile --windowed --hidden-import openpyxl kbart_gui.py
+pyinstaller --onefile --windowed --hidden-import openpyxl --collect-all customtkinter kbart_gui.py
 ```
+
+Der Zusatz `--collect-all customtkinter` ist notwendig, weil PyInstaller die
+Theme-Dateien des Pakets sonst nicht mit einpackt und die fertige Datei beim Start abbricht.
